@@ -1,0 +1,6 @@
+{
+  "mapping":{"gain":0.75,"offsetVoltageV":-0.275},
+  "adc":{"bits":16,"lsbMicrovolts":50.354004,"effectiveNumberOfBits":14.15917},
+  "noise":{"totalOutputNoiseRmsMicrovolts":79.372539,"fullScaleSnrDb":89.366573},
+  "error":{"expandedMicrovolts":2751.587421,"expandedPercentOfFullScale":0.083381}
+}

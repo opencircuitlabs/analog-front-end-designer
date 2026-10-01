@@ -1,0 +1,6 @@
+[
+  {"name":"sensor offset","microvolts":100,"distribution":"rectangular"},
+  {"name":"gain tolerance","ppmOfFullScale":500,"distribution":"rectangular"},
+  {"name":"reference accuracy","ppmOfFullScale":300,"distribution":"normal"},
+  {"name":"ADC INL","microvolts":75,"distribution":"rectangular"}
+]

@@ -1,0 +1,6 @@
+[
+  {"name":"sensor","inputNoiseRmsMicrovolts":5,"gainToOutput":10},
+  {"name":"amplifier","inputNoiseRmsMicrovolts":3,"gainToOutput":10},
+  {"name":"reference","inputNoiseRmsMicrovolts":20,"gainToOutput":1},
+  {"name":"ADC","inputNoiseRmsMicrovolts":50,"gainToOutput":1}
+]

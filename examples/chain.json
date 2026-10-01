@@ -1,0 +1,9 @@
+{
+  "sensorInputV":0.2,
+  "nominalGain":10,
+  "gainTolerancePercent":0.5,
+  "nominalOffsetV":0.1,
+  "offsetToleranceMicrovolts":500,
+  "referenceVoltageV":3.3,
+  "referenceTolerancePercent":0.1
+}

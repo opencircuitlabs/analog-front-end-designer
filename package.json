@@ -1,0 +1,12 @@
+{
+  "name": "@opencircuitlabs/analog-front-end-designer",
+  "version": "1.0.0",
+  "description": "Sensor scaling, amplifier, ADC, noise, filtering, settling, protection, calibration, and tolerance design toolkit",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": "./src/index.js",
+  "bin": {"analog-front-end-designer": "src/cli.js"},
+  "scripts": {"test": "node --test", "check": "npm test"},
+  "engines": {"node": ">=18"},
+  "license": "MIT"
+}

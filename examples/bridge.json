@@ -1,0 +1,9 @@
+{
+  "excitationVoltageV":5,
+  "sensitivityMvPerV":2,
+  "fullScaleUnits":100,
+  "appliedUnits":50,
+  "offsetMicrovolts":25,
+  "gain":100,
+  "referenceVoltageV":1.65
+}

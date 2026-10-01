@@ -1,0 +1,69 @@
+const K=1.380649e-23;
+const round=(value,places=6)=>Number(value.toFixed(places));
+const sum=values=>values.reduce((total,value)=>total+value,0);
+const positive=(value,name)=>{if(!(Number.isFinite(value)&&value>0))throw new Error(`positive ${name} is required`)};
+
+export function loadedDivider(inputVoltageV,topOhm,bottomOhm,loadOhm=Infinity){
+  if(!Number.isFinite(inputVoltageV))throw new Error('finite input voltage is required');positive(topOhm,'top resistance');positive(bottomOhm,'bottom resistance');if(!(loadOhm>0))throw new Error('positive load resistance is required');const effectiveBottom=loadOhm===Infinity?bottomOhm:1/(1/bottomOhm+1/loadOhm),output=inputVoltageV*effectiveBottom/(topOhm+effectiveBottom),current=inputVoltageV/(topOhm+effectiveBottom),thevenin=1/(1/topOhm+1/bottomOhm+(loadOhm===Infinity?0:1/loadOhm));return{outputVoltageV:round(output),dividerCurrentA:round(current,12),effectiveBottomOhm:round(effectiveBottom),theveninResistanceOhm:round(thevenin),topPowerW:round(current*current*topOhm,9),bottomPowerW:round(output*output/bottomOhm,9),loadPowerW:loadOhm===Infinity?0:round(output*output/loadOhm,9)};
+}
+
+export function amplifierStage(input){
+  const topology=input.topology??'non-inverting';positive(input.feedbackOhm,'feedback resistance');positive(input.gainOhm,'gain resistance');let gain;if(topology==='non-inverting')gain=1+input.feedbackOhm/input.gainOhm;else if(topology==='inverting')gain=-input.feedbackOhm/input.gainOhm;else throw new Error('supported amplifier topology is required');const reference=input.referenceVoltageV??0,output=(input.inputVoltageV??0)*gain+reference*(1-gain),noiseGain=topology==='inverting'?1+input.feedbackOhm/input.gainOhm:gain;return{topology,gain:round(gain),noiseGain:round(noiseGain),outputVoltageV:round(output),feedbackCurrentA:round(((input.inputVoltageV??0)-(topology==='inverting'?reference:0))/input.gainOhm,12)};
+}
+
+export function sensorMapping(sensorMinimumV,sensorMaximumV,outputMinimumV,outputMaximumV){
+  if(![sensorMinimumV,sensorMaximumV,outputMinimumV,outputMaximumV].every(Number.isFinite)||sensorMaximumV<=sensorMinimumV||outputMaximumV<=outputMinimumV)throw new Error('ordered finite sensor and output ranges are required');const gain=(outputMaximumV-outputMinimumV)/(sensorMaximumV-sensorMinimumV),offset=outputMinimumV-gain*sensorMinimumV;return{gain:round(gain),offsetVoltageV:round(offset),map: [{inputV:sensorMinimumV,outputV:outputMinimumV},{inputV:sensorMaximumV,outputV:outputMaximumV}],inputSpanV:round(sensorMaximumV-sensorMinimumV),outputSpanV:round(outputMaximumV-outputMinimumV)};
+}
+
+export function instrumentationAmplifier(input){
+  positive(input.gainResistorOhm,'gain resistor');positive(input.gainFactorOhm,'gain factor');const base=input.baseGain??1,gain=base+input.gainFactorOhm/input.gainResistorOhm,output=input.differentialInputV*gain+(input.referenceVoltageV??0),low=(input.negativeSupplyV??0)+(input.outputHeadroomV??0),high=input.positiveSupplyV-(input.outputHeadroomV??0);return{gain:round(gain),outputVoltageV:round(output),outputRangeV:[round(low),round(high)],outputMarginLowV:round(output-low),outputMarginHighV:round(high-output),pass:output>=low&&output<=high};
+}
+
+export function bridgeMeasurement(input){
+  for(const[key,name]of[['excitationVoltageV','excitation voltage'],['sensitivityMvPerV','bridge sensitivity'],['fullScaleUnits','full-scale units']])positive(input[key],name);if(!Number.isFinite(input.appliedUnits))throw new Error('finite applied units are required');const fraction=input.appliedUnits/input.fullScaleUnits,differential=input.excitationVoltageV*input.sensitivityMvPerV/1000*fraction+(input.offsetMicrovolts??0)/1e6,gain=input.gain??1,output=differential*gain+(input.referenceVoltageV??0);return{fractionOfFullScale:round(fraction),bridgeDifferentialV:round(differential,9),amplifierGain:gain,outputVoltageV:round(output)};
+}
+
+export function adcPerformance(bits,referenceVoltageV,options={}){
+  if(!Number.isInteger(bits)||bits<1)throw new Error('positive integer ADC bits are required');positive(referenceVoltageV,'reference voltage');const levels=2**bits,lsb=referenceVoltageV/levels,quantization=lsb/Math.sqrt(12),inputNoise=(options.inputNoiseRmsMicrovolts??0)/1e6,totalNoise=Math.hypot(quantization,inputNoise),enob=Math.log2(referenceVoltageV/(Math.sqrt(12)*totalNoise)),signal=options.inputVoltageV??referenceVoltageV/2,code=Math.max(0,Math.min(levels-1,Math.round(signal/lsb)));return{bits,levels,lsbMicrovolts:round(lsb*1e6),quantizationNoiseRmsMicrovolts:round(quantization*1e6),totalNoiseRmsMicrovolts:round(totalNoise*1e6),effectiveNumberOfBits:round(Math.min(bits,enob)),idealSnrDb:round(6.02*bits+1.76),inputVoltageV:signal,code};
+}
+
+export function adcSettling(sourceResistanceOhm,samplingCapacitancePf,acquisitionTimeMicroseconds,bits,stepVoltageV,referenceVoltageV=stepVoltageV){
+  positive(sourceResistanceOhm,'source resistance');positive(samplingCapacitancePf,'sampling capacitance');positive(acquisitionTimeMicroseconds,'acquisition time');if(!Number.isInteger(bits)||bits<1)throw new Error('positive integer bits are required');positive(stepVoltageV,'step voltage');positive(referenceVoltageV,'reference voltage');const tau=sourceResistanceOhm*samplingCapacitancePf*1e-12,error=stepVoltageV*Math.exp(-acquisitionTimeMicroseconds*1e-6/tau),halfLsb=referenceVoltageV/(2**bits*2),required=tau*Math.log(stepVoltageV/halfLsb);return{timeConstantNanoseconds:round(tau*1e9),settlingErrorMicrovolts:round(error*1e6,9),halfLsbMicrovolts:round(halfLsb*1e6),requiredAcquisitionMicroseconds:round(required*1e6),pass:error<=halfLsb};
+}
+
+export function rcLowPass(resistanceOhm,capacitanceFarad,frequenciesHz){
+  positive(resistanceOhm,'resistance');positive(capacitanceFarad,'capacitance');if(!Array.isArray(frequenciesHz)||!frequenciesHz.length||frequenciesHz.some(value=>!(value>=0)))throw new Error('non-negative frequencies are required');const cutoff=1/(2*Math.PI*resistanceOhm*capacitanceFarad),rows=frequenciesHz.map(frequency=>{const ratio=frequency/cutoff,magnitude=1/Math.sqrt(1+ratio*ratio);return{frequencyHz:frequency,magnitude:round(magnitude,9),attenuationDb:round(20*Math.log10(magnitude)),phaseDegrees:round(-Math.atan(ratio)*180/Math.PI)}});return{cutoffFrequencyHz:round(cutoff),timeConstantSeconds:round(resistanceOhm*capacitanceFarad,12),rows};
+}
+
+export function aliasFrequency(signalFrequencyHz,sampleFrequencyHz){positive(signalFrequencyHz,'signal frequency');positive(sampleFrequencyHz,'sample frequency');const folded=Math.abs(((signalFrequencyHz+sampleFrequencyHz/2)%sampleFrequencyHz)-sampleFrequencyHz/2);return{signalFrequencyHz,sampleFrequencyHz,nyquistFrequencyHz:sampleFrequencyHz/2,aliasFrequencyHz:round(folded),aliases:signalFrequencyHz>sampleFrequencyHz/2};}
+
+export function opAmpNoise(input){
+  for(const[key,name]of[['voltageNoiseNvRootHz','voltage-noise density'],['bandwidthHz','noise bandwidth'],['noiseGain','noise gain']])positive(input[key],name);if(!(input.currentNoisePaRootHz>=0&&input.sourceResistanceOhm>=0&&input.temperatureK>0))throw new Error('valid current noise, source resistance, and temperature are required');const bandwidth=input.bandwidthHz,voltage=input.voltageNoiseNvRootHz*1e-9*Math.sqrt(bandwidth),current=input.currentNoisePaRootHz*1e-12*input.sourceResistanceOhm*Math.sqrt(bandwidth),johnson=Math.sqrt(4*K*input.temperatureK*input.sourceResistanceOhm*bandwidth),inputRms=Math.hypot(voltage,current,johnson),output=inputRms*input.noiseGain;return{inputVoltageNoiseRmsMicrovolts:round(voltage*1e6),inputCurrentNoiseRmsMicrovolts:round(current*1e6),sourceJohnsonNoiseRmsMicrovolts:round(johnson*1e6),totalInputNoiseRmsMicrovolts:round(inputRms*1e6),totalOutputNoiseRmsMicrovolts:round(output*1e6)};
+}
+
+export function noiseBudget(contributors,fullScaleV=null){
+  if(!Array.isArray(contributors)||!contributors.length)throw new Error('noise contributors are required');const rows=contributors.map((item,index)=>{if(!(item.inputNoiseRmsMicrovolts>=0&&item.gainToOutput>=0))throw new Error(`valid noise required at contributor ${index}`);return{...item,outputNoiseRmsMicrovolts:round(item.inputNoiseRmsMicrovolts*item.gainToOutput)}}),total=Math.sqrt(sum(rows.map(row=>row.outputNoiseRmsMicrovolts**2))),snr=fullScaleV==null?null:20*Math.log10(fullScaleV/(total*1e-6*Math.sqrt(2)));return{rows,totalOutputNoiseRmsMicrovolts:round(total),fullScaleSnrDb:snr==null?null:round(snr)};
+}
+
+export function errorBudget(contributors,fullScaleV,coverageFactor=2){
+  if(!Array.isArray(contributors)||!contributors.length)throw new Error('error contributors are required');positive(fullScaleV,'full scale');positive(coverageFactor,'coverage factor');const rows=contributors.map((item,index)=>{let volts;if(item.volts!=null)volts=item.volts;else if(item.microvolts!=null)volts=item.microvolts/1e6;else if(item.ppmOfFullScale!=null)volts=item.ppmOfFullScale*1e-6*fullScaleV;else throw new Error(`error magnitude required at contributor ${index}`);if(!(volts>=0))throw new Error(`non-negative error required at contributor ${index}`);const divisor=item.distribution==='rectangular'?Math.sqrt(3):item.distribution==='triangular'?Math.sqrt(6):item.divisor??1;return{...item,volts:round(volts,12),standardVolts:volts/divisor}}),rss=Math.sqrt(sum(rows.map(row=>row.standardVolts**2))),worst=sum(rows.map(row=>row.volts));return{rows:rows.map(row=>({...row,standardVolts:round(row.standardVolts,12)})),combinedStandardMicrovolts:round(rss*1e6),expandedMicrovolts:round(rss*coverageFactor*1e6),worstCaseMicrovolts:round(worst*1e6),expandedPercentOfFullScale:round(rss*coverageFactor/fullScaleV*100)};
+}
+
+export function inputProtection(input){
+  for(const[key,name]of[['maximumInputV','maximum input voltage'],['clampVoltageV','clamp voltage'],['seriesResistanceOhm','series resistance'],['resistorPowerRatingW','resistor power rating']])positive(input[key],name);if(input.maximumInputV<=input.clampVoltageV)throw new Error('maximum input must exceed clamp voltage');const current=(input.maximumInputV-input.clampVoltageV)/input.seriesResistanceOhm,power=current**2*input.seriesResistanceOhm,leakageError=(input.inputLeakageNanoamp??0)*1e-9*input.seriesResistanceOhm,duty=input.pulseDurationSeconds&&input.repetitionPeriodSeconds?Math.min(1,input.pulseDurationSeconds/input.repetitionPeriodSeconds):1,averagePower=power*duty;return{clampCurrentA:round(current),peakResistorPowerW:round(power),averageResistorPowerW:round(averagePower),leakageErrorMicrovolts:round(leakageError*1e6),pass:averagePower<=input.resistorPowerRatingW&&(input.maximumClampCurrentA==null||current<=input.maximumClampCurrentA)};
+}
+
+export function headroomCheck(input){
+  const outputLow=input.negativeSupplyV+input.outputHeadroomFromRailV,outputHigh=input.positiveSupplyV-input.outputHeadroomFromRailV,inputLow=input.negativeSupplyV+input.inputCommonModeHeadroomV,inputHigh=input.positiveSupplyV-input.inputCommonModeHeadroomV,outputPass=input.outputMinimumV>=outputLow&&input.outputMaximumV<=outputHigh,inputPass=input.inputMinimumV>=inputLow&&input.inputMaximumV<=inputHigh;return{allowedInputRangeV:[round(inputLow),round(inputHigh)],allowedOutputRangeV:[round(outputLow),round(outputHigh)],inputPass,outputPass,pass:inputPass&&outputPass};
+}
+
+export function linearCalibration(points){
+  if(!Array.isArray(points)||points.length<2)throw new Error('at least two calibration points are required');const n=points.length,sx=sum(points.map(point=>point.raw)),sy=sum(points.map(point=>point.reference)),sxx=sum(points.map(point=>point.raw**2)),sxy=sum(points.map(point=>point.raw*point.reference)),den=n*sxx-sx*sx;if(Math.abs(den)<1e-18)throw new Error('calibration raw values must vary');const slope=(n*sxy-sx*sy)/den,intercept=(sy-slope*sx)/n,residuals=points.map(point=>point.reference-(slope*point.raw+intercept)),rms=Math.sqrt(sum(residuals.map(value=>value**2))/n),maximum=Math.max(...residuals.map(Math.abs));return{slope:round(slope,12),intercept:round(intercept,12),residuals:residuals.map(value=>round(value,12)),rmsResidual:round(rms,12),maximumAbsoluteResidual:round(maximum,12)};
+}
+
+function rng(seed){let state=seed>>>0;return()=>{state=(1664525*state+1013904223)>>>0;return state/4294967296}}
+export function monteCarloChain(input,options={}){
+  const iterations=options.iterations??500;if(!Number.isInteger(iterations)||iterations<1)throw new Error('positive integer iterations are required');const random=rng(options.seed??42),outputs=[];for(let index=0;index<iterations;index++){const gain=input.nominalGain*(1+(random()*2-1)*(input.gainTolerancePercent??0)/100),offset=input.nominalOffsetV+(random()*2-1)*(input.offsetToleranceMicrovolts??0)/1e6,reference=input.referenceVoltageV*(1+(random()*2-1)*(input.referenceTolerancePercent??0)/100),unclipped=input.sensorInputV*gain+offset,output=Math.min(reference,Math.max(0,unclipped));outputs.push(output)}outputs.sort((a,b)=>a-b);const q=p=>outputs[Math.floor(p*(iterations-1))];return{iterations,seed:options.seed??42,p05OutputV:round(q(.05)),p50OutputV:round(q(.5)),p95OutputV:round(q(.95)),meanOutputV:round(sum(outputs)/iterations),clippedCount:outputs.filter(value=>value===0||value===input.referenceVoltageV).length};
+}
+
+export function reportMarkdown(bundle){const lines=['# Analog front-end design',''];if(bundle.mapping)lines.push(`Sensor gain: ${bundle.mapping.gain} | Offset: ${bundle.mapping.offsetVoltageV} V`,'');if(bundle.adc)lines.push(`ADC: ${bundle.adc.bits} bit | LSB: ${bundle.adc.lsbMicrovolts} uV | ENOB: ${bundle.adc.effectiveNumberOfBits}`,'');if(bundle.noise)lines.push(`Output noise: ${bundle.noise.totalOutputNoiseRmsMicrovolts} uV RMS${bundle.noise.fullScaleSnrDb==null?'':` | SNR: ${bundle.noise.fullScaleSnrDb} dB`}`,'');if(bundle.error)lines.push(`Expanded error: ${bundle.error.expandedMicrovolts} uV (${bundle.error.expandedPercentOfFullScale}% FS)`,'');return`${lines.join('\n')}\n`}
